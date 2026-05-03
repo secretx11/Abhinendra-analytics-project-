@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1200">
+<title>Revenue Leak Analytics Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;0,9..144,700;1,9..144,400&family=DM+Sans:wght@300;400;500;600&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #F5F0EA;
+    --surface:   #FFFFFF;
+    --surface2:  #FAF7F4;
+    --border:    #E6DDD5;
+    --border2:   #D4C9BF;
+    --text:      #2A201A;
+    --muted:     #9A8880;
+    --muted2:    #C4B8B0;
+    --orange:    #D95F2B;
+    --green:     #2A7A52;
+    --blue:      #2B5BA8;
+    --rose:      #B94060;
+    --amber:     #C07D20;
+    --orange-lt: #FDF1EA;
+    --green-lt:  #EAF4EF;
+    --blue-lt:   #EAF0FB;
+    --rose-lt:   #FAEAEF;
+    --amber-lt:  #FDF4E4;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    width: 1200px;
+    height: 750px;
+    overflow: hidden;
+  }
+
+  /* subtle noise texture */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    opacity: 0.4;
+  }
+
+  .dashboard {
+    display: grid;
+    grid-template-rows: 60px 1fr 1fr;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    padding: 14px 16px;
+    height: 750px;
+  }
+
+  /* ── HEADER ── */
+  .header {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1.5px solid var(--border);
+    padding-bottom: 10px;
+  }
+
+  .logo-area { display: flex; align-items: center; gap: 10px; }
+
+  .logo-mark {
+    width: 34px; height: 34px;
+    background: var(--orange);
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+  }
+
+  .brand {
+    font-family: 'Fraunces', serif;
+    font-weight: 700;
+    font-size: 17px;
+    color: var(--text);
+    letter-spacing: -0.3px;
+  }
+
+  .brand-sub {
+    font-size: 10.5px;
+    color: var(--muted);
+    font-family: 'Fira Code', monospace;
+    margin-top: 0px;
+  }
+
+  .header-center {
+    text-align: center;
+  }
+
+  .header-title {
+    font-family: 'Fraunces', serif;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: -0.2px;
+  }
+
+  .header-sub {
+    font-size: 10px;
+    color: var(--muted);
+    font-family: 'Fira Code', monospace;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .live-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'Fira Code', monospace;
+    font-size: 10px;
+    color: var(--green);
+    background: var(--green-lt);
+    border: 1px solid #B8DECA;
+    padding: 4px 10px;
+    border-radius: 20px;
+  }
+
+  .live-dot {
+    width: 6px; height: 6px;
+    background: var(--green);
+    border-radius: 50%;
+    animation: breathe 2.5s ease-in-out infinite;
+  }
+
+  @keyframes breathe {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.85); }
+  }
+
+  .date-pill {
+    font-family: 'Fira Code', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 4px 10px;
+    border-radius: 20px;
+  }
+
+  /* ── KPI CARDS ── */
+  .kpi {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03);
+  }
+
+  .kpi::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 18px; right: 18px;
+    height: 3px;
+    border-radius: 3px 3px 0 0;
+    opacity: 0.7;
+  }
+
+  .kpi.rose::after   { background: var(--rose); }
+  .kpi.green::after  { background: var(--green); }
+  .kpi.blue::after   { background: var(--blue); }
+  .kpi.amber::after  { background: var(--amber); }
+
+  .kpi-icon {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    margin-bottom: 8px;
+  }
+
+  .kpi.rose  .kpi-icon { background: var(--rose-lt); }
+  .kpi.green .kpi-icon { background: var(--green-lt); }
+  .kpi.blue  .kpi-icon { background: var(--blue-lt); }
+  .kpi.amber .kpi-icon { background: var(--amber-lt); }
+
+  .kpi-label {
+    font-size: 10px;
+    font-family: 'Fira Code', monospace;
+    color: var(--muted);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  .kpi-value {
+    font-family: 'Fraunces', serif;
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -1px;
+  }
+
+  .kpi.rose  .kpi-value { color: var(--rose); }
+  .kpi.green .kpi-value { color: var(--green); }
+  .kpi.blue  .kpi-value { color: var(--blue); }
+  .kpi.amber .kpi-value { color: var(--amber); }
+
+  .kpi-change {
+    font-size: 10.5px;
+    color: var(--muted);
+    margin-top: 5px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  .tag-up   { color: var(--green); font-weight: 600; }
+  .tag-down { color: var(--rose);  font-weight: 600; }
+  .tag-info { color: var(--blue);  font-weight: 600; }
+
+  /* ── CHART CARDS ── */
+  .card {
+    grid-column: span 2;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px 18px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+
+  .card-title {
+    font-family: 'Fraunces', serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: -0.2px;
+  }
+
+  .card-chip {
+    font-family: 'Fira Code', monospace;
+    font-size: 9.5px;
+    padding: 3px 8px;
+    border-radius: 5px;
+    background: var(--surface2);
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+
+  .card-chart { flex: 1; position: relative; min-height: 0; }
+
+  /* ── FUNNEL CARD ── */
+  .funnel-card {
+    grid-column: span 2;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px 18px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03);
+  }
+
+  .funnel-rows { display: flex; flex-direction: column; gap: 7px; margin-top: 6px; }
+
+  .f-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .f-stage {
+    font-family: 'Fira Code', monospace;
+    font-size: 9.5px;
+    color: var(--muted);
+    width: 88px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .f-track {
+    flex: 1;
+    height: 22px;
+    background: var(--surface2);
+    border-radius: 5px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+
+  .f-fill {
+    height: 100%;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    padding-left: 8px;
+    font-family: 'Fira Code', monospace;
+    font-size: 9.5px;
+    font-weight: 500;
+  }
+
+  .f-count {
+    font-family: 'Fira Code', monospace;
+    font-size: 9.5px;
+    color: var(--muted);
+    width: 50px;
+    text-align: right;
+  }
+
+  .f-drop {
+    font-family: 'Fira Code', monospace;
+    font-size: 9px;
+    width: 38px;
+    text-align: right;
+  }
+
+  /* ── INSIGHTS CARD ── */
+  .insights-card {
+    grid-column: span 2;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px 18px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03);
+  }
+
+  .insight-row {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .insight-row:last-child { border-bottom: none; }
+
+  .insight-n {
+    font-family: 'Fraunces', serif;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--muted2);
+    width: 22px;
+    flex-shrink: 0;
+    line-height: 1;
+  }
+
+  .insight-text {
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--text);
+    opacity: 0.85;
+  }
+
+  .hl-rose  { color: var(--rose);  font-weight: 600; }
+  .hl-green { color: var(--green); font-weight: 600; }
+  .hl-blue  { color: var(--blue);  font-weight: 600; }
+  .hl-amber { color: var(--amber); font-weight: 600; }
+
+  .watermark {
+    position: absolute;
+    bottom: 14px; right: 16px;
+    font-family: 'Fira Code', monospace;
+    font-size: 8.5px;
+    color: var(--muted2);
+    letter-spacing: 1px;
+  }
+</style>
+</head>
+<body>
+<div class="dashboard">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="logo-area">
+      <div class="logo-mark">📊</div>
+      <div>
+        <div class="brand">Revenue Leak Intelligence</div>
+        <div class="brand-sub">business analytics · abhinendra</div>
+      </div>
+    </div>
+    <div class="header-center">
+      <div class="header-title">Where Is Your Business Bleeding Money?</div>
+      <div class="header-sub">D2C Brand Case Study · 60-Day Recovery Sprint</div>
+    </div>
+    <div class="header-right">
+      <div class="live-pill"><div class="live-dot"></div>Live</div>
+      <div class="date-pill">Q1 2025 · FY Analysis</div>
+    </div>
+  </div>
+
+  <!-- KPI 1 -->
+  <div class="kpi rose">
+    <div>
+      <div class="kpi-icon">🩸</div>
+      <div class="kpi-label">Monthly Revenue Leak</div>
+      <div class="kpi-value">₹42.6L</div>
+    </div>
+    <div class="kpi-change"><span class="tag-down">Undetected</span> for 8 months</div>
+  </div>
+
+  <!-- KPI 2 -->
+  <div class="kpi green">
+    <div>
+      <div class="kpi-icon">✅</div>
+      <div class="kpi-label">Revenue Recovered</div>
+      <div class="kpi-value">₹36.8L</div>
+    </div>
+    <div class="kpi-change"><span class="tag-up">86.4%</span> recovery in 60 days</div>
+  </div>
+
+  <!-- KPI 3 -->
+  <div class="kpi blue">
+    <div>
+      <div class="kpi-icon">⚡</div>
+      <div class="kpi-label">Funnel Efficiency</div>
+      <div class="kpi-value">+134%</div>
+    </div>
+    <div class="kpi-change">Conversion <span class="tag-up">2.1% → 4.9%</span></div>
+  </div>
+
+  <!-- KPI 4 -->
+  <div class="kpi amber">
+    <div>
+      <div class="kpi-icon">⏱</div>
+      <div class="kpi-label">Time to Detect</div>
+      <div class="kpi-value">3 Hrs</div>
+    </div>
+    <div class="kpi-change">Previously <span class="tag-down">3–4 weeks</span></div>
+  </div>
+
+  <!-- REVENUE TREND CHART -->
+  <div class="card">
+    <div class="card-head">
+      <div class="card-title">📈 Revenue Recovery Timeline</div>
+      <div class="card-chip">60-day sprint</div>
+    </div>
+    <div class="card-chart">
+      <canvas id="revenueChart"></canvas>
+    </div>
+  </div>
+
+  <!-- LEAK SOURCES CHART -->
+  <div class="card">
+    <div class="card-head">
+      <div class="card-title">🎯 Revenue Leak by Source</div>
+      <div class="card-chip">root cause</div>
+    </div>
+    <div class="card-chart">
+      <canvas id="leakChart"></canvas>
+    </div>
+  </div>
+
+  <!-- FUNNEL CARD -->
+  <div class="funnel-card">
+    <div class="card-head">
+      <div class="card-title">🔻 Customer Journey Funnel</div>
+      <div class="card-chip">drop-off analysis</div>
+    </div>
+    <div class="funnel-rows">
+      <!-- headers -->
+      <div style="display:flex;gap:10px;padding-bottom:4px;border-bottom:1px solid var(--border)">
+        <div style="width:88px;text-align:right;font-family:'Fira Code',monospace;font-size:9px;color:var(--muted2)">stage</div>
+        <div style="flex:1;font-family:'Fira Code',monospace;font-size:9px;color:var(--muted2)">volume</div>
+        <div style="width:50px;text-align:right;font-family:'Fira Code',monospace;font-size:9px;color:var(--muted2)">count</div>
+        <div style="width:38px;text-align:right;font-family:'Fira Code',monospace;font-size:9px;color:var(--muted2)">drop</div>
+      </div>
+      <div class="f-row">
+        <div class="f-stage">Awareness</div>
+        <div class="f-track"><div class="f-fill" style="width:100%;background:#E8F0FB;color:var(--blue)">100%</div></div>
+        <div class="f-count">84,200</div>
+        <div class="f-drop" style="color:var(--muted2)">—</div>
+      </div>
+      <div class="f-row">
+        <div class="f-stage">Site Visit</div>
+        <div class="f-track"><div class="f-fill" style="width:72%;background:#E8F0FB;color:var(--blue)">72%</div></div>
+        <div class="f-count">60,624</div>
+        <div class="f-drop" style="color:var(--amber)">-28%</div>
+      </div>
+      <div class="f-row">
+        <div class="f-stage">Product View</div>
+        <div class="f-track"><div class="f-fill" style="width:41%;background:#FDF4E4;color:var(--amber)">41%</div></div>
+        <div class="f-count">34,522</div>
+        <div class="f-drop" style="color:var(--rose)">-31%</div>
+      </div>
+      <div class="f-row">
+        <div class="f-stage">Add to Cart</div>
+        <div class="f-track"><div class="f-fill" style="width:18%;background:#FAEAEF;color:var(--rose)">18%</div></div>
+        <div class="f-count">15,156</div>
+        <div class="f-drop" style="color:var(--rose)">-23%</div>
+      </div>
+      <div class="f-row">
+        <div class="f-stage">Checkout</div>
+        <div class="f-track"><div class="f-fill" style="width:8%;background:#FAEAEF;color:var(--rose)">8%</div></div>
+        <div class="f-count">6,736</div>
+        <div class="f-drop" style="color:var(--rose)">-10%</div>
+      </div>
+      <div class="f-row">
+        <div class="f-stage">Purchase ✓</div>
+        <div class="f-track"><div class="f-fill" style="width:4.9%;background:#EAF4EF;color:var(--green)">4.9%</div></div>
+        <div class="f-count">4,126</div>
+        <div class="f-drop" style="color:var(--green)">↑2.1→4.9</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- INSIGHTS -->
+  <div class="insights-card" style="position:relative">
+    <div class="card-head">
+      <div class="card-title">💡 Key Analyst Findings</div>
+      <div class="card-chip">actions taken</div>
+    </div>
+    <div class="insight-row">
+      <div class="insight-n">01</div>
+      <div class="insight-text"><span class="hl-rose">Cart abandonment at 72%</span> — hidden fees + slow load. Fixed with CDN + transparent pricing → <span class="hl-green">+38% checkout rate</span></div>
+    </div>
+    <div class="insight-row">
+      <div class="insight-n">02</div>
+      <div class="insight-text"><span class="hl-amber">₹18.2L/mo leaked</span> from inactive segments never retargeted. Cohort analysis + reactivation campaign → <span class="hl-green">22% customer win-back</span></div>
+    </div>
+    <div class="insight-row">
+      <div class="insight-n">03</div>
+      <div class="insight-text">Top <span class="hl-rose">3 SKUs drove 61% of returns</span> — size mismatch, not bad product. One data fix dropped return rate <span class="hl-green">from 28% → 9%</span></div>
+    </div>
+    <div class="insight-row">
+      <div class="insight-n">04</div>
+      <div class="insight-text"><span class="hl-blue">Tuesday evening anomaly</span> — 2.4× cancellation spike. Dynamic pricing model deployed → <span class="hl-green">₹4.6L saved/month</span></div>
+    </div>
+    <div class="watermark">ABHINENDRA · DATA ANALYTICS</div>
+  </div>
+
+</div>
+
+<script>
+Chart.defaults.color = '#9A8880';
+Chart.defaults.font.family = "'DM Sans', sans-serif";
+Chart.defaults.font.size = 10;
+
+// Revenue Recovery Chart
+const ctx1 = document.getElementById('revenueChart').getContext('2d');
+const gradLeak = ctx1.createLinearGradient(0, 0, 0, 160);
+gradLeak.addColorStop(0, 'rgba(185,64,96,0.15)');
+gradLeak.addColorStop(1, 'rgba(185,64,96,0)');
+const gradRecov = ctx1.createLinearGradient(0, 0, 0, 160);
+gradRecov.addColorStop(0, 'rgba(42,122,82,0.15)');
+gradRecov.addColorStop(1, 'rgba(42,122,82,0)');
+
+new Chart(ctx1, {
+  type: 'line',
+  data: {
+    labels: ['Wk 1','Wk 2','Wk 3','Wk 4','Wk 5','Wk 6','Wk 7','Wk 8'],
+    datasets: [
+      {
+        label: 'Leak (₹L)',
+        data: [42.6, 38.1, 31.4, 24.8, 18.2, 13.5, 9.1, 5.8],
+        borderColor: '#B94060',
+        backgroundColor: gradLeak,
+        fill: true, tension: 0.4, borderWidth: 2,
+        pointRadius: 4, pointBackgroundColor: '#B94060',
+        pointBorderColor: '#fff', pointBorderWidth: 1.5
+      },
+      {
+        label: 'Recovered (₹L)',
+        data: [0, 4.5, 11.2, 17.8, 24.4, 29.1, 33.5, 36.8],
+        borderColor: '#2A7A52',
+        backgroundColor: gradRecov,
+        fill: true, tension: 0.4, borderWidth: 2,
+        pointRadius: 4, pointBackgroundColor: '#2A7A52',
+        pointBorderColor: '#fff', pointBorderWidth: 1.5
+      }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'bottom', labels: { boxWidth: 10, padding: 14, usePointStyle: true, pointStyle: 'circle' } },
+      tooltip: { backgroundColor: '#fff', borderColor: '#E6DDD5', borderWidth: 1, titleColor: '#2A201A', bodyColor: '#9A8880', padding: 10 }
+    },
+    scales: {
+      x: { grid: { color: '#F0EAE4' }, ticks: { color: '#9A8880' } },
+      y: { grid: { color: '#F0EAE4' }, ticks: { color: '#9A8880', callback: v => '₹'+v+'L' } }
+    }
+  }
+});
+
+// Leak Sources Chart
+const ctx2 = document.getElementById('leakChart').getContext('2d');
+new Chart(ctx2, {
+  type: 'bar',
+  data: {
+    labels: ['Cart Abandon', 'Cust. Churn', 'Returns', 'Pricing', 'Bad Ads'],
+    datasets: [{
+      label: 'Revenue Leaked (₹L)',
+      data: [18.2, 11.4, 7.8, 3.2, 2.0],
+      backgroundColor: ['#FAEAEF','#FDF4E4','#EAF0FB','#EAF4EF','#F5F0EA'],
+      borderColor: ['#B94060','#C07D20','#2B5BA8','#2A7A52','#9A8880'],
+      borderWidth: 1.5,
+      borderRadius: 6,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { backgroundColor: '#fff', borderColor: '#E6DDD5', borderWidth: 1, titleColor: '#2A201A', bodyColor: '#9A8880', padding: 10, callbacks: { label: c => ' ₹'+c.raw+'L leaked' } }
+    },
+    scales: {
+      x: { grid: { display: false }, ticks: { color: '#9A8880', font: { size: 9.5 } } },
+      y: { grid: { color: '#F0EAE4' }, ticks: { color: '#9A8880', callback: v => '₹'+v+'L' } }
+    }
+  }
+});
+</script>
+</body>
+</html>
