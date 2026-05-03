@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1200">
+<title>Revenue Leak Analytics Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #060B18;
+    --surface: #0D1526;
+    --surface2: #111D35;
+    --border: rgba(0, 229, 255, 0.12);
+    --cyan: #00E5FF;
+    --green: #00FF87;
+    --orange: #FF6B35;
+    --purple: #A855F7;
+    --red: #FF3B6E;
+    --text: #E8F4FF;
+    --muted: #5A7A9A;
+    --grid: rgba(255,255,255,0.03);
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    width: 1200px;
+    min-height: 750px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* Ambient glow BG */
+  body::before {
+    content: '';
+    position: fixed;
+    top: -200px; left: -200px;
+    width: 600px; height: 600px;
+    background: radial-gradient(circle, rgba(0,229,255,0.06) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  body::after {
+    content: '';
+    position: fixed;
+    bottom: -200px; right: -200px;
+    width: 500px; height: 500px;
+    background: radial-gradient(circle, rgba(0,255,135,0.05) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .dashboard {
+    display: grid;
+    grid-template-rows: 64px 1fr 1fr;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    padding: 16px;
+    height: 750px;
+  }
+
+  /* ─── HEADER ─── */
+  .header {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 12px;
+  }
+
+  .logo-area {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-icon {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--cyan), var(--green));
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+  }
+
+  .brand-name {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    letter-spacing: 2px;
+    color: var(--cyan);
+  }
+
+  .brand-sub {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    letter-spacing: 0.5px;
+  }
+
+  .header-meta {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .live-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--green);
+    background: rgba(0,255,135,0.08);
+    border: 1px solid rgba(0,255,135,0.2);
+    padding: 4px 10px;
+    border-radius: 20px;
+  }
+
+  .live-dot {
+    width: 6px; height: 6px;
+    background: var(--green);
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .header-date {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .header-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+    opacity: 0.8;
+  }
+
+  /* ─── CARDS ─── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+    opacity: 0.4;
+  }
+
+  .card-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .card-value {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 36px;
+    line-height: 1;
+    letter-spacing: 1px;
+  }
+
+  .card-change {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .up { color: var(--green); }
+  .down { color: var(--red); }
+  .neutral { color: var(--cyan); }
+
+  .card-sub {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 2px;
+    font-family: 'DM Mono', monospace;
+  }
+
+  /* KPI specific */
+  .kpi-1 .card-value { color: var(--red); }
+  .kpi-2 .card-value { color: var(--green); }
+  .kpi-3 .card-value { color: var(--cyan); }
+  .kpi-4 .card-value { color: var(--orange); }
+
+  .kpi-1::before { background: linear-gradient(90deg, transparent, var(--red), transparent); }
+  .kpi-2::before { background: linear-gradient(90deg, transparent, var(--green), transparent); }
+  .kpi-3::before { background: linear-gradient(90deg, transparent, var(--cyan), transparent); }
+  .kpi-4::before { background: linear-gradient(90deg, transparent, var(--orange), transparent); }
+
+  .kpi-icon {
+    position: absolute;
+    top: 14px; right: 14px;
+    font-size: 22px;
+    opacity: 0.25;
+  }
+
+  /* ─── CHART CARDS ─── */
+  .chart-card {
+    grid-column: span 2;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .chart-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+    opacity: 0.3;
+  }
+
+  .chart-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+
+  .chart-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .chart-badge {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: rgba(0,229,255,0.08);
+    color: var(--cyan);
+    border: 1px solid rgba(0,229,255,0.15);
+  }
+
+  .chart-container {
+    position: relative;
+    height: 175px;
+  }
+
+  /* ─── FUNNEL CARD ─── */
+  .funnel-card {
+    grid-column: span 2;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .funnel-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--purple), transparent);
+    opacity: 0.5;
+  }
+
+  .funnel-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    margin-top: 4px;
+  }
+
+  .funnel-step {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .funnel-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    width: 90px;
+    flex-shrink: 0;
+    text-align: right;
+  }
+
+  .funnel-bar-wrap {
+    flex: 1;
+    height: 22px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .funnel-bar {
+    height: 100%;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    padding-left: 8px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    transition: width 1s ease;
+    position: relative;
+  }
+
+  .funnel-count {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    width: 55px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .funnel-drop {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    color: var(--red);
+    width: 40px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  /* ─── INSIGHTS CARD ─── */
+  .insights-card {
+    grid-column: span 2;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    overflow: hidden;
+  }
+
+  .insights-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--orange), transparent);
+    opacity: 0.4;
+  }
+
+  .insight-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+
+  .insight-item:last-child { border-bottom: none; }
+
+  .insight-num {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 20px;
+    color: var(--cyan);
+    line-height: 1;
+    width: 22px;
+    flex-shrink: 0;
+  }
+
+  .insight-text {
+    font-size: 11px;
+    color: var(--text);
+    opacity: 0.8;
+    line-height: 1.4;
+  }
+
+  .insight-tag {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  .highlight { color: var(--cyan); font-weight: 600; }
+  .highlight-red { color: var(--red); font-weight: 600; }
+  .highlight-green { color: var(--green); font-weight: 600; }
+
+  /* Watermark */
+  .watermark {
+    position: absolute;
+    bottom: 18px;
+    right: 18px;
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    color: var(--muted);
+    opacity: 0.4;
+    letter-spacing: 1px;
+  }
+</style>
+</head>
+<body>
+<div class="dashboard">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="logo-area">
+      <div class="logo-icon">📊</div>
+      <div>
+        <div class="brand-name">Revenue Leak Intelligence</div>
+        <div class="brand-sub">Business Analytics · Powered by Data</div>
+      </div>
+    </div>
+    <div class="header-title">Where Is Your Business Bleeding Money?</div>
+    <div class="header-meta">
+      <div class="live-badge"><div class="live-dot"></div> LIVE</div>
+      <div class="header-date">Q1 2025 · FY ANALYSIS</div>
+    </div>
+  </div>
+
+  <!-- KPI 1 -->
+  <div class="card kpi-1">
+    <div class="kpi-icon">🔴</div>
+    <div class="card-label">Monthly Revenue Leak</div>
+    <div class="card-value">₹42.6L</div>
+    <div class="card-change down">▼ Identified via analytics</div>
+    <div class="card-sub">Prev. undetected for 8 months</div>
+  </div>
+
+  <!-- KPI 2 -->
+  <div class="card kpi-2">
+    <div class="kpi-icon">✅</div>
+    <div class="card-label">Revenue Recovered</div>
+    <div class="card-value">₹36.8L</div>
+    <div class="card-change up">▲ 86.4% recovery in 60 days</div>
+    <div class="card-sub">After analytics-driven fixes</div>
+  </div>
+
+  <!-- KPI 3 -->
+  <div class="card kpi-3">
+    <div class="kpi-icon">⚡</div>
+    <div class="card-label">Funnel Efficiency</div>
+    <div class="card-value">+134%</div>
+    <div class="card-change up">▲ Across all 5 channels</div>
+    <div class="card-sub">Conversion rate: 2.1% → 4.9%</div>
+  </div>
+
+  <!-- KPI 4 -->
+  <div class="card kpi-4">
+    <div class="kpi-icon">⏱</div>
+    <div class="card-label">Time To Detect</div>
+    <div class="card-value">3 HRS</div>
+    <div class="card-change neutral">↗ With automated dashboards</div>
+    <div class="card-sub">Previously took 3–4 weeks</div>
+  </div>
+
+  <!-- CHART 1 - Revenue Trend -->
+  <div class="chart-card">
+    <div class="chart-header">
+      <div class="chart-title">📈 Revenue Recovery Timeline</div>
+      <div class="chart-badge">60-DAY SPRINT</div>
+    </div>
+    <div class="chart-container">
+      <canvas id="revenueChart"></canvas>
+    </div>
+  </div>
+
+  <!-- CHART 2 - Leak Sources -->
+  <div class="chart-card">
+    <div class="chart-header">
+      <div class="chart-title">🎯 Revenue Leak by Source</div>
+      <div class="chart-badge">ROOT CAUSE</div>
+    </div>
+    <div class="chart-container">
+      <canvas id="leakChart"></canvas>
+    </div>
+  </div>
+
+  <!-- FUNNEL CARD -->
+  <div class="funnel-card">
+    <div class="chart-header">
+      <div class="chart-title">🔻 Customer Journey Funnel</div>
+      <div class="chart-badge">DROP-OFF ANALYSIS</div>
+    </div>
+    <div class="funnel-steps">
+      <div style="display:flex; gap:10px; align-items:center; padding-bottom:4px; border-bottom:1px solid rgba(255,255,255,0.05)">
+        <div style="font-family:DM Mono,monospace;font-size:9px;color:var(--muted);width:90px;text-align:right">STAGE</div>
+        <div style="flex:1;font-family:DM Mono,monospace;font-size:9px;color:var(--muted)">VOLUME</div>
+        <div style="font-family:DM Mono,monospace;font-size:9px;color:var(--muted);width:55px;text-align:right">COUNT</div>
+        <div style="font-family:DM Mono,monospace;font-size:9px;color:var(--muted);width:40px;text-align:right">DROP</div>
+      </div>
+      <div class="funnel-step">
+        <div class="funnel-label">Awareness</div>
+        <div class="funnel-bar-wrap"><div class="funnel-bar" style="width:100%;background:linear-gradient(90deg,rgba(0,229,255,0.35),rgba(0,229,255,0.15));color:var(--cyan)">100%</div></div>
+        <div class="funnel-count">84,200</div>
+        <div class="funnel-drop">—</div>
+      </div>
+      <div class="funnel-step">
+        <div class="funnel-label">Site Visit</div>
+        <div class="funnel-bar-wrap"><div class="funnel-bar" style="width:72%;background:linear-gradient(90deg,rgba(0,229,255,0.3),rgba(0,229,255,0.1));color:var(--cyan)">72%</div></div>
+        <div class="funnel-count">60,624</div>
+        <div class="funnel-drop" style="color:var(--orange)">-28%</div>
+      </div>
+      <div class="funnel-step">
+        <div class="funnel-label">Product View</div>
+        <div class="funnel-bar-wrap"><div class="funnel-bar" style="width:41%;background:linear-gradient(90deg,rgba(255,107,53,0.35),rgba(255,107,53,0.1));color:var(--orange)">41%</div></div>
+        <div class="funnel-count">34,522</div>
+        <div class="funnel-drop">-31%</div>
+      </div>
+      <div class="funnel-step">
+        <div class="funnel-label">Add to Cart</div>
+        <div class="funnel-bar-wrap"><div class="funnel-bar" style="width:18%;background:linear-gradient(90deg,rgba(255,59,110,0.4),rgba(255,59,110,0.1));color:var(--red)">18%</div></div>
+        <div class="funnel-count">15,156</div>
+        <div class="funnel-drop">-23%</div>
+      </div>
+      <div class="funnel-step">
+        <div class="funnel-label">Checkout</div>
+        <div class="funnel-bar-wrap"><div class="funnel-bar" style="width:8%;background:linear-gradient(90deg,rgba(255,59,110,0.5),rgba(255,59,110,0.2));color:var(--red)">8%</div></div>
+        <div class="funnel-count">6,736</div>
+        <div class="funnel-drop">-10%</div>
+      </div>
+      <div class="funnel-step">
+        <div class="funnel-label">Purchase ✓</div>
+        <div class="funnel-bar-wrap"><div class="funnel-bar" style="width:4.9%;background:linear-gradient(90deg,rgba(0,255,135,0.5),rgba(0,255,135,0.2));color:var(--green)">4.9%</div></div>
+        <div class="funnel-count">4,126</div>
+        <div class="funnel-drop" style="color:var(--green)">2.1→4.9%</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- INSIGHTS CARD -->
+  <div class="insights-card" style="position:relative">
+    <div class="chart-header">
+      <div class="chart-title">💡 Analyst Findings</div>
+      <div class="chart-badge">KEY ACTIONS TAKEN</div>
+    </div>
+    <div class="funnel-steps" style="gap:0">
+      <div class="insight-item">
+        <div class="insight-num">01</div>
+        <div>
+          <div class="insight-text"><span class="highlight-red">Cart abandonment at 72%</span> — root cause: slow load times + hidden fees. Fixed with CDN + transparent pricing → <span class="highlight-green">+38% checkout rate</span></div>
+        </div>
+      </div>
+      <div class="insight-item">
+        <div class="insight-num">02</div>
+        <div>
+          <div class="insight-text"><span class="highlight">₹18.2L leaked</span> via inactive customer segments never retargeted. Cohort analysis + reactivation emails = <span class="highlight-green">22% win-back</span></div>
+        </div>
+      </div>
+      <div class="insight-item">
+        <div class="insight-num">03</div>
+        <div>
+          <div class="insight-text">Top <span class="highlight-red">3 SKUs drove 61%</span> of returns — size/description mismatch. Data fix reduced return rate from <span class="highlight">28% → 9%</span></div>
+        </div>
+      </div>
+      <div class="insight-item">
+        <div class="insight-num">04</div>
+        <div>
+          <div class="insight-text">Pricing anomaly detected: <span class="highlight">Tuesday evening</span> orders had 2.4× higher cancellation. Dynamic pricing model saved <span class="highlight-green">₹4.6L/mo</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="watermark">ABHI · SPIDER HUSTLE · DATA ANALYTICS</div>
+  </div>
+
+</div>
+
+<script>
+Chart.defaults.color = '#5A7A9A';
+Chart.defaults.font.family = 'DM Mono, monospace';
+Chart.defaults.font.size = 10;
+
+// Revenue Recovery Chart
+const ctx1 = document.getElementById('revenueChart').getContext('2d');
+const gradient1 = ctx1.createLinearGradient(0, 0, 0, 175);
+gradient1.addColorStop(0, 'rgba(0,255,135,0.3)');
+gradient1.addColorStop(1, 'rgba(0,255,135,0)');
+
+new Chart(ctx1, {
+  type: 'line',
+  data: {
+    labels: ['Wk1','Wk2','Wk3','Wk4','Wk5','Wk6','Wk7','Wk8'],
+    datasets: [
+      {
+        label: 'Leaked (₹L)',
+        data: [42.6, 38.1, 31.4, 24.8, 18.2, 13.5, 9.1, 5.8],
+        borderColor: '#FF3B6E',
+        backgroundColor: 'rgba(255,59,110,0.07)',
+        fill: true,
+        tension: 0.4,
+        borderWidth: 2,
+        pointRadius: 3,
+        pointBackgroundColor: '#FF3B6E'
+      },
+      {
+        label: 'Recovered (₹L)',
+        data: [0, 4.5, 11.2, 17.8, 24.4, 29.1, 33.5, 36.8],
+        borderColor: '#00FF87',
+        backgroundColor: gradient1,
+        fill: true,
+        tension: 0.4,
+        borderWidth: 2,
+        pointRadius: 3,
+        pointBackgroundColor: '#00FF87'
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'bottom',
+        labels: { boxWidth: 10, padding: 12, color: '#5A7A9A', font: { size: 9 } }
+      },
+      tooltip: {
+        backgroundColor: '#0D1526',
+        borderColor: 'rgba(0,229,255,0.2)',
+        borderWidth: 1,
+        titleColor: '#00E5FF',
+        bodyColor: '#E8F4FF'
+      }
+    },
+    scales: {
+      x: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#5A7A9A' } },
+      y: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#5A7A9A', callback: v => '₹'+v+'L' } }
+    }
+  }
+});
+
+// Leak Sources Bar Chart
+const ctx2 = document.getElementById('leakChart').getContext('2d');
+new Chart(ctx2, {
+  type: 'bar',
+  data: {
+    labels: ['Cart\nAbandon', 'Customer\nChurn', 'Product\nReturns', 'Pricing\nErrors', 'Bad\nAds Spend'],
+    datasets: [{
+      label: 'Revenue Leaked (₹L)',
+      data: [18.2, 11.4, 7.8, 3.2, 2.0],
+      backgroundColor: [
+        'rgba(255,59,110,0.7)',
+        'rgba(255,107,53,0.7)',
+        'rgba(168,85,247,0.7)',
+        'rgba(0,229,255,0.7)',
+        'rgba(0,255,135,0.7)'
+      ],
+      borderColor: [
+        '#FF3B6E','#FF6B35','#A855F7','#00E5FF','#00FF87'
+      ],
+      borderWidth: 1,
+      borderRadius: 4
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#0D1526',
+        borderColor: 'rgba(0,229,255,0.2)',
+        borderWidth: 1,
+        titleColor: '#00E5FF',
+        bodyColor: '#E8F4FF',
+        callbacks: { label: ctx => ' ₹' + ctx.raw + 'L leaked' }
+      }
+    },
+    scales: {
+      x: { grid: { display: false }, ticks: { color: '#5A7A9A', font: { size: 9 } } },
+      y: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#5A7A9A', callback: v => '₹'+v+'L' } }
+    }
+  }
+});
+</script>
+</body>
+</html>
